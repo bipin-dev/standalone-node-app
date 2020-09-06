@@ -1,4 +1,6 @@
-var crypto = require("crypto");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+const _ = require("underscore");
 
 class WorkflowService {
   constructor(framework, config) {
@@ -16,6 +18,9 @@ class WorkflowService {
 
   async create(req, res) {
     let values = req.body;
+    if (values.password) {
+      values.password = await this.cryptPassword(values.password);
+    }
     this.fr.DBManager.db.registrations
       .save(values)
       .then((result) => {
@@ -29,10 +34,9 @@ class WorkflowService {
   async update(req, res) {
     let values = req.body;
     let id = req.params.id;
-
-    console.log("id is ... ", id);
-    console.log("values ... ", values);
-
+    if (values.password) {
+      values.password = await this.cryptPassword(values.password);
+    }
     this.fr.DBManager.db.registrations
       .findByIdAndUpdate(id, values)
       .then((result) => {
@@ -70,21 +74,20 @@ class WorkflowService {
     let params = req.params;
     let data = await this.get({ _id: params.id });
     data = data && data[0];
-    res.send(data);
+    res.send(_.omit(data, "password"));
   }
 
   cryptPassword(password) {
-    var algorithm = "aes256"; // or any other algorithm supported by OpenSSL
-    var key = "password";
-    var text = "I love kittens";
-
-    var cipher = crypto.createCipher(algorithm, key);
-    var encrypted = cipher.update(text, "utf8", "hex") + cipher.final("hex");
-    var decipher = crypto.createDecipher(algorithm, key);
-    var decrypted =
-      decipher.update(encrypted, "hex", "utf8") + decipher.final("utf8");
+    return bcrypt.hash(password, saltRounds).then(function (hash) {
+      return hash;
+    });
   }
-  decryptPassword() {}
+
+  matchPassword(password, hash) {
+    return bcrypt.compare(password, hash, function (err, result) {
+      return result;
+    });
+  }
 }
 
 module.exports = WorkflowService;
